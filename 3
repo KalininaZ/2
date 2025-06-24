@@ -1,0 +1,71 @@
+import sqlite3
+import hashlib
+import secrets
+import string
+
+def generate_password(length=12):
+    chars = string.ascii_letters + string.digits + "!@#$%^&*"
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+def hash_password(password, salt=None):
+    if salt is None:
+        salt = secrets.token_hex(8)
+    hashed = hashlib.sha256((password + salt).encode()).hexdigest()
+    return hashed, salt
+
+def init_db():
+    conn = sqlite3.connect('passwords.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS passwords (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service TEXT NOT NULL,
+            hashed_password TEXT NOT NULL,
+            salt TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def save_password(service, password):
+    hashed, salt = hash_password(password)
+    conn = sqlite3.connect('passwords.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO passwords (service, hashed_password, salt)
+        VALUES (?, ?, ?)
+    ''', (service, hashed, salt))
+    conn.commit()
+    conn.close()
+
+def get_password(service):
+    conn = sqlite3.connect('passwords.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT hashed_password, salt FROM passwords WHERE service = ?
+    ''', (service,))
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+if __name__ == "__main__":
+    init_db()
+    
+    # Генерация и сохранение пароля
+    service = "example.com"
+    password = generate_password()
+    print(f"Сгенерированный пароль для {service}: {password}")
+    save_password(service, password)
+    
+    # Получение и проверка хеша
+    stored_hash, salt = get_password(service)
+    print(f"Хеш пароля в БД: {stored_hash}")
+    print(f"Соль: {salt}")
+    
+    # Проверка хеширования (имитация ввода пароля)
+    test_password = input("Введите пароль для проверки: ")
+    test_hashed, _ = hash_password(test_password, salt)
+    if test_hashed == stored_hash:
+        print("Пароль верный!")
+    else:
+        print("Неверный пароль!")
